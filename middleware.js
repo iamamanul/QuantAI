@@ -9,7 +9,17 @@ const isProtectedRoute = createRouteMatcher([
   "/onboarding(.*)",
 ]);
 
+const isPublicApiRoute = createRouteMatcher([
+  "/api/inngest(.*)",
+  "/api/webhooks(.*)", // Add other public API routes if needed
+]);
+
 export default clerkMiddleware(async (auth, req) => {
+  // Skip auth for public API routes
+  if (isPublicApiRoute(req)) {
+    return NextResponse.next();
+  }
+
   const { userId } = await auth();
 
   if (!userId && isProtectedRoute(req)) {

@@ -1,0 +1,150 @@
+/* ATS-Friendly Resume PDF Styles */
+.resume-pdf {
+  font-family: 'Arial', 'Helvetica', sans-serif;
+  font-size: 12px;
+  line-height: 1.4;
+  color: #000;
+  background: white;
+  padding: 20px;
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.resume-pdf h1 {
+  font-size: 24px;
+  font-weight: bold;
+  margin: 0 0 10px 0;
+  color: #2c3e50;
+  border-bottom: 2px solid #3498db;
+  padding-bottom: 5px;
+}
+
+.resume-pdf h2 {
+  font-size: 16px;
+  font-weight: bold;
+  margin: 15px 0 8px 0;
+  color: #34495e;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.resume-pdf h3 {
+  font-size: 14px;
+  font-weight: bold;
+  margin: 10px 0 5px 0;
+  color: #2c3e50;
+}
+
+.resume-pdf p {
+  margin: 5px 0;
+  text-align: justify;
+}
+
+.resume-pdf strong {
+  font-weight: bold;
+  color: #2c3e50;
+}
+
+.resume-pdf ul {
+  margin: 5px 0;
+  padding-left: 20px;
+}
+
+.resume-pdf li {
+  margin: 3px 0;
+}
+
+.resume-pdf .contact-info {
+  text-align: center;
+  margin-bottom: 20px;
+  padding: 10px;
+  background-color: #f8f9fa;
+  border-radius: 5px;
+}
+
+.resume-pdf .section {
+  margin-bottom: 20px;
+}
+
+.resume-pdf .entry {
+  margin-bottom: 15px;
+  page-break-inside: avoid;
+}
+
+.resume-pdf .entry-header {
+  font-weight: bold;
+  margin-bottom: 5px;
+}
+
+.resume-pdf .entry-date {
+  font-style: italic;
+  color: #7f8c8d;
+  margin-bottom: 8px;
+}
+
+.resume-pdf .entry-description {
+  margin-top: 5px;
+}
+
+.resume-pdf .skills-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 10px 0;
+}
+
+.resume-pdf .skill-item {
+  background-color: #ecf0f1;
+  padding: 3px 8px;
+  border-radius: 3px;
+  font-size: 11px;
+}
+
+/* Print-specific styles */
+@media print {
+  .resume-pdf {
+    padding: 15px;
+    font-size: 11px;
+  }
+  
+  .resume-pdf h1 {
+    font-size: 20px;
+  }
+  
+  .resume-pdf h2 {
+    font-size: 14px;
+  }
+  
+  .resume-pdf h3 {
+    font-size: 12px;
+  }
+  
+  .resume-pdf .entry {
+    page-break-inside: avoid;
+  }
+}
+
+/* ATS Optimization */
+.resume-pdf * {
+  box-sizing: border-box;
+}
+
+.resume-pdf .ats-friendly {
+  /* Ensure text is readable by ATS systems */
+  font-family: Arial, sans-serif;
+  font-size: 12px;
+  line-height: 1.4;
+  color: #000;
+}
+
+.resume-pdf .no-images {
+  /* Avoid images that might confuse ATS */
+  background-image: none !important;
+}
+
+.resume-pdf .simple-layout {
+  /* Use simple, linear layout */
+  display: block;
+  width: 100%;
+  max-width: none;
+} 

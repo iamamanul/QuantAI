@@ -27,8 +27,9 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
+import CareerRoadmap from "./career-roadmap";
 
-const DashboardView = ({ insights }) => {
+const DashboardView = ({ insights, user, careerRoadmap }) => {
   // Transform salary data for the chart
   const salaryData = insights.salaryRanges.map((range) => ({
     name: range.role,
@@ -220,6 +221,17 @@ const DashboardView = ({ insights }) => {
             </div>
           </CardContent>
         </Card>
+      </div>
+
+      {/* Career Roadmap Section */}
+      <div className="mt-8">
+        <h2 className="text-3xl font-bold mb-6 gradient-title">Your Career Roadmap</h2>
+        <CareerRoadmap 
+          insights={insights} 
+          userSkills={user.skills} 
+          userExperience={user.experience}
+          careerRoadmap={careerRoadmap}
+        />
       </div>
     </div>
   );

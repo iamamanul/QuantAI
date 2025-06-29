@@ -7,6 +7,33 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
+export async function improveJobDescription(jobDescription) {
+  const prompt = `
+    Improve the following job description to make it more clear, professional, and comprehensive for AI cover letter generation.
+    
+    Original Job Description:
+    ${jobDescription}
+    
+    Please enhance it by:
+    1. Clarifying vague requirements
+    2. Adding missing details about responsibilities
+    3. Making it more structured and readable
+    4. Highlighting key skills and qualifications
+    5. Adding context about the role and company expectations
+    
+    Return ONLY the improved job description without any additional text or explanations.
+  `;
+
+  try {
+    const result = await model.generateContent(prompt);
+    const improvedDescription = result.response.text().trim();
+    return improvedDescription;
+  } catch (error) {
+    console.error("Error improving job description:", error);
+    throw new Error("Failed to improve job description");
+  }
+}
+
 export async function generateCoverLetter(data) {
   const { userId } = await auth();
   if (!userId) throw new Error("Unauthorized");
@@ -21,6 +48,12 @@ export async function generateCoverLetter(data) {
     Write a professional cover letter for a ${data.jobTitle} position at ${
     data.companyName
   }.
+    
+    Personal Information:
+    - Name: ${data.fullName}
+    - Email: ${data.email}
+    - Phone: ${data.phone}
+    - Address: ${data.address}
     
     About the candidate:
     - Industry: ${user.industry}
@@ -39,8 +72,11 @@ export async function generateCoverLetter(data) {
     5. Use proper business letter formatting in markdown
     6. Include specific examples of achievements
     7. Relate candidate's background to job requirements
+    8. Make it ATS-friendly with clear structure
+    9. Include the candidate's personal information in the header
     
-    Format the letter in markdown.
+    Format the letter in professional markdown with proper spacing and structure.
+    Start with the candidate's contact information at the top, followed by the date, company address, and then the letter content.
   `;
 
   try {

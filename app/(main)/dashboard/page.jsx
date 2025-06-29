@@ -12,11 +12,11 @@ export default async function DashboardPage() {
     redirect("/onboarding");
   }
 
-  const insights = await getIndustryInsights();
+  const { insights, user, careerRoadmap } = await getIndustryInsights();
 
   return (
     <div className="container mx-auto">
-      <DashboardView insights={insights} />
+      <DashboardView insights={insights} user={user} careerRoadmap={careerRoadmap} />
     </div>
   );
 }

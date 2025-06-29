@@ -36,6 +36,53 @@ export const generateAIInsights = async (industry) => {
   return JSON.parse(cleanedText);
 };
 
+export const generateCareerRoadmap = async (industry, userExperience, userSkills) => {
+  const prompt = `
+    Based on the following user profile, generate a personalized career roadmap in ONLY the following JSON format without any additional notes or explanations:
+    
+    Industry: ${industry}
+    Years of Experience: ${userExperience}
+    Current Skills: ${userSkills.join(', ')}
+    
+    Return ONLY this JSON format:
+    {
+      "currentLevel": "entry" | "mid" | "senior" | "expert",
+      "careerPath": [
+        {
+          "title": "string",
+          "duration": "string",
+          "skills": ["string"],
+          "description": "string"
+        }
+      ],
+      "skillGaps": ["string"],
+      "nextSteps": [
+        {
+          "action": "string",
+          "priority": "high" | "medium" | "low",
+          "description": "string"
+        }
+      ]
+    }
+    
+    IMPORTANT GUIDELINES:
+    - currentLevel should be determined by experience: entry (0-2 years), mid (2-5 years), senior (5-10 years), expert (10+ years)
+    - careerPath should show 4 realistic progression steps starting from their current level
+    - Each step should have realistic job titles for their industry
+    - skills should be specific to each role
+    - skillGaps should be the top 5 most important missing skills
+    - nextSteps should be 3 actionable recommendations
+    - Return ONLY the JSON, no additional text or formatting
+  `;
+
+  const result = await model.generateContent(prompt);
+  const response = result.response;
+  const text = response.text();
+  const cleanedText = text.replace(/```(?:json)?\n?/g, "").trim();
+
+  return JSON.parse(cleanedText);
+};
+
 export async function getIndustryInsights() {
   const { userId } = await auth();
   if (!userId) throw new Error("Unauthorized");
@@ -61,8 +108,36 @@ export async function getIndustryInsights() {
       },
     });
 
-    return industryInsight;
+    // Generate personalized career roadmap
+    const careerRoadmap = await generateCareerRoadmap(
+      user.industry,
+      user.experience || 0,
+      user.skills || []
+    );
+
+    return {
+      insights: industryInsight,
+      user: {
+        skills: user.skills || [],
+        experience: user.experience || 0,
+      },
+      careerRoadmap,
+    };
   }
 
-  return user.industryInsight;
+  // Generate personalized career roadmap for existing users
+  const careerRoadmap = await generateCareerRoadmap(
+    user.industry,
+    user.experience || 0,
+    user.skills || []
+  );
+
+  return {
+    insights: user.industryInsight,
+    user: {
+      skills: user.skills || [],
+      experience: user.experience || 0,
+    },
+    careerRoadmap,
+  };
 }
