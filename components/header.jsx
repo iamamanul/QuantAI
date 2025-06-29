@@ -28,10 +28,10 @@ export default async function Header() {
         <Link href="/">
           <Image
             src={"/logo.png"}
-            alt="Sensai Logo"
+            alt=" QuantAI Logo"
             width={200}
             height={60}
-            className="h-12 py-1 w-auto object-contain"
+            className="h-16 w-auto object-contain"
           />
         </Link>
 
