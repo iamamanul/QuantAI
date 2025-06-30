@@ -24,14 +24,14 @@ export default async function Header() {
 
   return (
     <header className="fixed top-0 w-full border-b bg-background/80 backdrop-blur-md z-50 supports-[backdrop-filter]:bg-background/60">
-      <nav className="container mx-auto px-4 h-16 flex items-center justify-between">
+      <nav className="container mx-auto px-4 h-18 flex items-center justify-between">
         <Link href="/">
           <Image
             src={"/logo.png"}
             alt=" QuantAI Logo"
             width={200}
             height={60}
-            className="h-16 w-auto object-contain"
+            className="h-[6rem] w-auto object-contain"
           />
         </Link>
 
