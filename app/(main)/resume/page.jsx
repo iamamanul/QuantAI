@@ -1,18 +1,21 @@
 "use client";
-import useSWR, { SWRConfig } from "swr";
+import { useEffect, useRef, useState } from "react";
 import ResumeBuilder from "./_components/resume-builder";
-import { useRef, useEffect, useState } from "react";
 
 export const dynamic = "force-dynamic";
 
-const fetcher = (url) => fetch(url).then((res) => res.json());
-
 export default function ResumePage() {
   const [isClient, setIsClient] = useState(false);
+  const [SWRConfig, setSWRConfig] = useState(null);
+  const [useSWR, setUseSWR] = useState(null);
   const providerRef = useRef();
 
   useEffect(() => {
     setIsClient(true);
+    import("swr").then((mod) => {
+      setSWRConfig(() => mod.SWRConfig);
+      setUseSWR(() => mod.default);
+    });
     if (!providerRef.current) {
       providerRef.current = function localStorageProvider() {
         const map = new Map(JSON.parse(localStorage.getItem("swr-resume-cache") || "[]"));
@@ -25,24 +28,26 @@ export default function ResumePage() {
     }
   }, []);
 
-  if (!isClient) return null;
+  if (!isClient || !SWRConfig || !useSWR) return null;
+
+  const fetcher = (url) => fetch(url).then((res) => res.json());
+
+  function ResumeContent() {
+    const { data, error, isLoading } = useSWR("/api/resume");
+
+    if (isLoading) return <div>Loading...</div>;
+    if (error) return <div>Error loading resume.</div>;
+
+    return (
+      <div className="py-6">
+        <ResumeBuilder initialContent={data?.content} />
+      </div>
+    );
+  }
 
   return (
     <SWRConfig value={{ fetcher, provider: providerRef.current }}>
       <ResumeContent />
     </SWRConfig>
-  );
-}
-
-function ResumeContent() {
-  const { data, error, isLoading } = useSWR("/api/resume");
-
-  if (isLoading) return <div>Loading...</div>;
-  if (error) return <div>Error loading resume.</div>;
-
-  return (
-    <div className="py-6">
-      <ResumeBuilder initialContent={data?.content} />
-    </div>
   );
 }
