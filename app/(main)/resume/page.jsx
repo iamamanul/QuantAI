@@ -1,6 +1,5 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import ResumeBuilder from "./_components/resume-builder";
 
 export const dynamic = "force-dynamic";
 
@@ -8,6 +7,7 @@ export default function ResumePage() {
   const [isClient, setIsClient] = useState(false);
   const [SWRConfig, setSWRConfig] = useState(null);
   const [useSWR, setUseSWR] = useState(null);
+  const [ResumeBuilder, setResumeBuilder] = useState(null);
   const providerRef = useRef();
 
   useEffect(() => {
@@ -15,6 +15,9 @@ export default function ResumePage() {
     import("swr").then((mod) => {
       setSWRConfig(() => mod.SWRConfig);
       setUseSWR(() => mod.default);
+    });
+    import("./_components/resume-builder").then((mod) => {
+      setResumeBuilder(() => mod.default);
     });
     if (!providerRef.current) {
       providerRef.current = function localStorageProvider() {
@@ -28,7 +31,7 @@ export default function ResumePage() {
     }
   }, []);
 
-  if (!isClient || !SWRConfig || !useSWR) return null;
+  if (!isClient || !SWRConfig || !useSWR || !ResumeBuilder) return null;
 
   const fetcher = (url) => fetch(url).then((res) => res.json());
 
