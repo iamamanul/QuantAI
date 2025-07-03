@@ -8,6 +8,8 @@ import CoverLetterList from "./_components/cover-letter-list";
 
 const fetcher = (url) => fetch(url).then((res) => res.json());
 
+export const dynamic = "force-dynamic";
+
 export default function CoverLetterPage() {
   const { data: coverLetters, error, isLoading } = useSWR("/api/cover-letters", fetcher);
 

@@ -7,6 +7,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 const fetcher = (url) => fetch(url).then((res) => res.json());
 
+export const dynamic = "force-dynamic";
+
 export default function InterviewPrepPage() {
   const { data: assessments, error, isLoading } = useSWR("/api/assessments", fetcher);
 

@@ -4,6 +4,8 @@ import ResumeBuilder from "./_components/resume-builder";
 
 const fetcher = (url) => fetch(url).then((res) => res.json());
 
+export const dynamic = "force-dynamic";
+
 export default function ResumePage() {
   const { data, error, isLoading } = useSWR("/api/resume", fetcher);
 
