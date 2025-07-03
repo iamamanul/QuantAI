@@ -106,30 +106,39 @@ export async function getIndustryInsights() {
 
   // STRICT CACHE: Only call Gemini if no cached data exists
   if (!user.industryInsight) {
-    const insights = await generateAIInsights(user.industry);
-    const industryInsight = await db.industryInsight.create({
-      data: {
-        industry: user.industry,
-        ...insights,
-        nextUpdate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-      },
-    });
-    const careerRoadmap = await generateCareerRoadmap(
-      user.industry,
-      user.experience || 0,
-      user.skills || []
-    );
-    return {
-      insights: industryInsight,
-      user: {
-        name: clerkUser?.firstName && clerkUser?.lastName ? `${clerkUser.firstName} ${clerkUser.lastName}` : clerkUser?.username || clerkUser?.emailAddress || "User",
-        email: clerkUser?.emailAddresses?.[0]?.emailAddress || undefined,
-        skills: user.skills || [],
-        experience: user.experience || 0,
-        industry: user.industry || undefined,
-      },
-      careerRoadmap,
-    };
+    try {
+      const insights = await generateAIInsights(user.industry);
+      const industryInsight = await db.industryInsight.create({
+        data: {
+          industry: user.industry,
+          ...insights,
+          nextUpdate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        },
+      });
+      const careerRoadmap = await generateCareerRoadmap(
+        user.industry,
+        user.experience || 0,
+        user.skills || []
+      );
+      return {
+        insights: industryInsight,
+        user: {
+          name: clerkUser?.firstName && clerkUser?.lastName ? `${clerkUser.firstName} ${clerkUser.lastName}` : clerkUser?.username || clerkUser?.emailAddress || "User",
+          email: clerkUser?.emailAddresses?.[0]?.emailAddress || undefined,
+          skills: user.skills || [],
+          experience: user.experience || 0,
+          industry: user.industry || undefined,
+        },
+        careerRoadmap,
+      };
+    } catch (err) {
+      if (err.status === 429 || (err.statusText && err.statusText.includes("Too Many Requests"))) {
+        return {
+          error: "You have reached the daily Gemini API limit for industry insights. Please try again tomorrow or upgrade your plan.",
+        };
+      }
+      throw err;
+    }
   }
 
   // Always use cached data if it exists

@@ -55,6 +55,17 @@ function IndustryInsightsContent() {
   if (error) return <div>Error loading insights.</div>;
   if (!data) return null;
 
+  if (data.error) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[300px] bg-gradient-to-r from-red-100 to-pink-100 border-2 border-red-400 rounded-xl shadow-lg p-8 my-8">
+        <span className="text-5xl mb-4">🚦</span>
+        <h2 className="text-2xl font-bold text-red-700 mb-2">Gemini API Limit Reached</h2>
+        <p className="text-lg text-red-600 mb-2">{data.error}</p>
+        <p className="text-base text-muted-foreground">You can try again tomorrow, or upgrade your Gemini API plan for more requests.</p>
+      </div>
+    );
+  }
+
   const { insights, user, careerRoadmap } = data;
 
   return (
