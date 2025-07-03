@@ -1,12 +1,18 @@
-import { getCoverLetters } from "@/actions/cover-letter";
+"use client";
+import useSWR from "swr";
 import Link from "next/link";
 import { Plus, FileText, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import CoverLetterList from "./_components/cover-letter-list";
 
-export default async function CoverLetterPage() {
-  const coverLetters = await getCoverLetters();
+const fetcher = (url) => fetch(url).then((res) => res.json());
+
+export default function CoverLetterPage() {
+  const { data: coverLetters, error, isLoading } = useSWR("/api/cover-letters", fetcher);
+
+  if (isLoading) return <div>Loading...</div>;
+  if (error) return <div>Error loading cover letters.</div>;
 
   return (
     <div className="space-y-6">

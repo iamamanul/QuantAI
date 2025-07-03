@@ -1,7 +1,7 @@
 "use server";
 
 import { db } from "@/lib/prisma";
-import { auth } from "@clerk/nextjs/server";
+import { auth, currentUser } from "@clerk/nextjs/server";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
@@ -87,6 +87,14 @@ export async function getIndustryInsights() {
   const { userId } = await auth();
   if (!userId) throw new Error("Unauthorized");
 
+  // Fetch Clerk user info
+  let clerkUser = null;
+  try {
+    clerkUser = await currentUser();
+  } catch (e) {
+    clerkUser = null;
+  }
+
   const user = await db.user.findUnique({
     where: { clerkUserId: userId },
     include: {
@@ -96,10 +104,9 @@ export async function getIndustryInsights() {
 
   if (!user) throw new Error("User not found");
 
-  // If no insights exist, generate them
+  // STRICT CACHE: Only call Gemini if no cached data exists
   if (!user.industryInsight) {
     const insights = await generateAIInsights(user.industry);
-
     const industryInsight = await db.industryInsight.create({
       data: {
         industry: user.industry,
@@ -107,36 +114,38 @@ export async function getIndustryInsights() {
         nextUpdate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
       },
     });
-
-    // Generate personalized career roadmap
     const careerRoadmap = await generateCareerRoadmap(
       user.industry,
       user.experience || 0,
       user.skills || []
     );
-
     return {
       insights: industryInsight,
       user: {
+        name: clerkUser?.firstName && clerkUser?.lastName ? `${clerkUser.firstName} ${clerkUser.lastName}` : clerkUser?.username || clerkUser?.emailAddress || "User",
+        email: clerkUser?.emailAddresses?.[0]?.emailAddress || undefined,
         skills: user.skills || [],
         experience: user.experience || 0,
+        industry: user.industry || undefined,
       },
       careerRoadmap,
     };
   }
 
-  // Generate personalized career roadmap for existing users
+  // Always use cached data if it exists
   const careerRoadmap = await generateCareerRoadmap(
     user.industry,
     user.experience || 0,
     user.skills || []
   );
-
   return {
     insights: user.industryInsight,
     user: {
+      name: clerkUser?.firstName && clerkUser?.lastName ? `${clerkUser.firstName} ${clerkUser.lastName}` : clerkUser?.username || clerkUser?.emailAddress || "User",
+      email: clerkUser?.emailAddresses?.[0]?.emailAddress || undefined,
       skills: user.skills || [],
       experience: user.experience || 0,
+      industry: user.industry || undefined,
     },
     careerRoadmap,
   };
