@@ -1,17 +1,45 @@
 "use client";
-import useSWR from "swr";
+import useSWR, { SWRConfig } from "swr";
 import Link from "next/link";
 import { Plus, FileText, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import CoverLetterList from "./_components/cover-letter-list";
-
-const fetcher = (url) => fetch(url).then((res) => res.json());
+import { useRef, useEffect, useState } from "react";
 
 export const dynamic = "force-dynamic";
 
+const fetcher = (url) => fetch(url).then((res) => res.json());
+
 export default function CoverLetterPage() {
-  const { data: coverLetters, error, isLoading } = useSWR("/api/cover-letters", fetcher);
+  const [isClient, setIsClient] = useState(false);
+  const providerRef = useRef();
+
+  useEffect(() => {
+    setIsClient(true);
+    if (!providerRef.current) {
+      providerRef.current = function localStorageProvider() {
+        const map = new Map(JSON.parse(localStorage.getItem("swr-cover-letters-cache") || "[]"));
+        window.addEventListener("beforeunload", () => {
+          const data = JSON.stringify(Array.from(map.entries()));
+          localStorage.setItem("swr-cover-letters-cache", data);
+        });
+        return map;
+      };
+    }
+  }, []);
+
+  if (!isClient) return null;
+
+  return (
+    <SWRConfig value={{ fetcher, provider: providerRef.current }}>
+      <CoverLetterContent />
+    </SWRConfig>
+  );
+}
+
+function CoverLetterContent() {
+  const { data: coverLetters, error, isLoading } = useSWR("/api/cover-letters");
 
   if (isLoading) return <div>Loading...</div>;
   if (error) return <div>Error loading cover letters.</div>;
