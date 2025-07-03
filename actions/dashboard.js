@@ -53,7 +53,77 @@ async function fetchGroqInsights(industry) {
   return JSON.parse(text);
 }
 
-export const generateAIInsights = async (industry) => {
+// Fallback: Groq API fetch for Career Roadmap
+async function fetchGroqCareerRoadmap(industry, userExperience, userSkills) {
+  const prompt = `
+    Based on the following user profile, generate a personalized career roadmap in ONLY the following JSON format without any additional notes or explanations:
+    
+    Industry: ${industry}
+    Years of Experience: ${userExperience}
+    Current Skills: ${userSkills.join(', ')}
+    
+    Return ONLY this JSON format:
+    {
+      "currentLevel": "entry" | "mid" | "senior" | "expert",
+      "careerPath": [
+        {
+          "title": "string",
+          "duration": "string",
+          "skills": ["string"],
+          "description": "string"
+        }
+      ],
+      "skillGaps": ["string"],
+      "nextSteps": [
+        {
+          "action": "string",
+          "priority": "high" | "medium" | "low",
+          "description": "string"
+        }
+      ]
+    }
+    
+    IMPORTANT GUIDELINES:
+    - currentLevel should be determined by experience: entry (0-2 years), mid (2-5 years), senior (5-10 years), expert (10+ years)
+    - careerPath should show 4 realistic progression steps starting from their current level
+    - Each step should have realistic job titles for their industry
+    - skills should be specific to each role
+    - skillGaps should be the top 5 most important missing skills
+    - nextSteps should be 3 actionable recommendations
+    - Return ONLY the JSON, no additional text or formatting
+  `;
+  const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${process.env.GROQ_API_KEY}`,
+    },
+    body: JSON.stringify({
+      model: "llama3-70b-8192",
+      messages: [
+        { role: "system", content: "You are a helpful assistant." },
+        { role: "user", content: prompt },
+      ],
+      max_tokens: 1024,
+      temperature: 0.7,
+    }),
+  });
+  if (!response.ok) {
+    throw new Error("Groq API failed: " + (await response.text()));
+  }
+  const data = await response.json();
+  let text = data.choices?.[0]?.message?.content || "";
+  text = text.replace(/```(?:json)?\n?/g, "").trim();
+  return JSON.parse(text);
+}
+
+export const generateAIInsights = async (industry, provider = "gemini") => {
+  console.log("generateAIInsights called with provider:", provider);
+  if (provider === "groq") {
+    console.log("Calling Groq API...");
+    return await fetchGroqInsights(industry);
+  }
+  console.log("Calling Gemini API...");
   const prompt = `
           Analyze the current state of the ${industry} industry and provide insights in ONLY the following JSON format without any additional notes or explanations:
           {
@@ -79,12 +149,17 @@ export const generateAIInsights = async (industry) => {
     const cleanedText = text.replace(/```(?:json)?\n?/g, "").trim();
     return JSON.parse(cleanedText);
   } catch (err) {
-    // If Gemini fails, fallback to Groq
+    // Only fallback to Groq if the original provider was Gemini
+    console.log("Gemini failed, falling back to Groq API...");
     return await fetchGroqInsights(industry);
   }
 };
 
-export const generateCareerRoadmap = async (industry, userExperience, userSkills) => {
+export const generateCareerRoadmap = async (industry, userExperience, userSkills, provider = "gemini") => {
+  if (provider === "groq") {
+    console.log("Calling Groq API for Career Roadmap...");
+    return await fetchGroqCareerRoadmap(industry, userExperience, userSkills);
+  }
   const prompt = `
     Based on the following user profile, generate a personalized career roadmap in ONLY the following JSON format without any additional notes or explanations:
     
@@ -131,7 +206,8 @@ export const generateCareerRoadmap = async (industry, userExperience, userSkills
   return JSON.parse(cleanedText);
 };
 
-export async function getIndustryInsights() {
+export async function getIndustryInsights(provider = "gemini") {
+  console.log("getIndustryInsights called with provider:", provider);
   const { userId } = await auth();
   if (!userId) throw new Error("Unauthorized");
 
@@ -155,7 +231,7 @@ export async function getIndustryInsights() {
   // STRICT CACHE: Only call Gemini if no cached data exists
   if (!user.industryInsight) {
     try {
-      const insights = await generateAIInsights(user.industry);
+      let insights = await generateAIInsights(user.industry, provider);
       const industryInsight = await db.industryInsight.create({
         data: {
           industry: user.industry,
@@ -166,7 +242,8 @@ export async function getIndustryInsights() {
       const careerRoadmap = await generateCareerRoadmap(
         user.industry,
         user.experience || 0,
-        user.skills || []
+        user.skills || [],
+        provider
       );
       return {
         insights: industryInsight,
@@ -180,6 +257,40 @@ export async function getIndustryInsights() {
         careerRoadmap,
       };
     } catch (err) {
+      if (provider === "gemini" && (err.status === 429 || (err.statusText && err.statusText.includes("Too Many Requests")))) {
+        // If Gemini fails due to quota, try Groq as fallback
+        try {
+          const insights = await fetchGroqInsights(user.industry);
+          const industryInsight = await db.industryInsight.create({
+            data: {
+              industry: user.industry,
+              ...insights,
+              nextUpdate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+            },
+          });
+          const careerRoadmap = await generateCareerRoadmap(
+            user.industry,
+            user.experience || 0,
+            user.skills || [],
+            provider
+          );
+          return {
+            insights: industryInsight,
+            user: {
+              name: clerkUser?.firstName && clerkUser?.lastName ? `${clerkUser.firstName} ${clerkUser.lastName}` : clerkUser?.username || clerkUser?.emailAddress || "User",
+              email: clerkUser?.emailAddresses?.[0]?.emailAddress || undefined,
+              skills: user.skills || [],
+              experience: user.experience || 0,
+              industry: user.industry || undefined,
+            },
+            careerRoadmap,
+          };
+        } catch (groqErr) {
+          return {
+            error: "Both Gemini and Groq API limits reached or failed. Please try again tomorrow or upgrade your plan.",
+          };
+        }
+      }
       if (err.status === 429 || (err.statusText && err.statusText.includes("Too Many Requests"))) {
         return {
           error: "You have reached the daily Gemini API limit for industry insights. Please try again tomorrow or upgrade your plan.",
@@ -193,7 +304,8 @@ export async function getIndustryInsights() {
   const careerRoadmap = await generateCareerRoadmap(
     user.industry,
     user.experience || 0,
-    user.skills || []
+    user.skills || [],
+    provider
   );
   return {
     insights: user.industryInsight,
