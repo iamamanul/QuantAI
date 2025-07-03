@@ -17,7 +17,7 @@ import {
   TrendingDown,
   Brain,
 } from "lucide-react";
-import { format, formatDistanceToNow } from "date-fns";
+import { format, formatDistanceToNow, isValid } from "date-fns";
 import {
   Card,
   CardContent,
@@ -69,11 +69,20 @@ const DashboardView = ({ insights, user, careerRoadmap }) => {
   const outlookColor = getMarketOutlookInfo(insights.marketOutlook).color;
 
   // Format dates using date-fns
-  const lastUpdatedDate = format(new Date(insights.lastUpdated), "dd/MM/yyyy");
-  const nextUpdateDistance = formatDistanceToNow(
-    new Date(insights.nextUpdate),
-    { addSuffix: true }
-  );
+  const lastUpdatedDate = (() => {
+    if (insights.lastUpdated) {
+      const d = new Date(insights.lastUpdated);
+      return isValid(d) ? format(d, "dd/MM/yyyy") : "N/A";
+    }
+    return "N/A";
+  })();
+  const nextUpdateDistance = (() => {
+    if (insights.nextUpdate) {
+      const d = new Date(insights.nextUpdate);
+      return isValid(d) ? formatDistanceToNow(d, { addSuffix: true }) : "N/A";
+    }
+    return "N/A";
+  })();
 
   return (
     <div className="space-y-6">

@@ -1,4 +1,5 @@
-import React from "react";
+"use client";
+import React, { useEffect } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -21,8 +22,17 @@ import { features } from "@/data/features";
 import { testimonial } from "@/data/testimonial";
 import { faqs } from "@/data/faqs";
 import { howItWorks } from "@/data/howItWorks";
+import { useAuth } from "@clerk/nextjs";
 
 export default function LandingPage() {
+  const { isSignedIn } = useAuth();
+
+  useEffect(() => {
+    if (!isSignedIn) {
+      localStorage.removeItem("swr-industry-insights-cache");
+    }
+  }, [isSignedIn]);
+
   return (
     <>
       <div className="grid-background"></div>

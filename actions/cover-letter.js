@@ -34,6 +34,36 @@ export async function improveJobDescription(jobDescription) {
   }
 }
 
+async function fetchGroqCoverLetter(prompt) {
+  if (!process.env.GROQ_API_KEY) {
+    throw new Error("GROQ_API_KEY is not set in the environment.");
+  }
+  const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${process.env.GROQ_API_KEY}`,
+    },
+    body: JSON.stringify({
+      model: "llama3-70b-8192",
+      messages: [
+        { role: "system", content: "You are a helpful assistant." },
+        { role: "user", content: prompt },
+      ],
+      max_tokens: 1024,
+      temperature: 0.7,
+    }),
+  });
+  if (!response.ok) {
+    const errText = await response.text();
+    throw new Error("Groq API failed: " + errText);
+  }
+  const data = await response.json();
+  let text = data.choices?.[0]?.message?.content || "";
+  text = text.replace(/```(?:markdown)?\n?/g, "").trim();
+  return text;
+}
+
 export async function generateCoverLetter(data) {
   const { userId } = await auth();
   if (!userId) throw new Error("Unauthorized");
@@ -80,8 +110,28 @@ export async function generateCoverLetter(data) {
   `;
 
   try {
-    const result = await model.generateContent(prompt);
-    const content = result.response.text().trim();
+    let content;
+    try {
+      const result = await model.generateContent(prompt);
+      content = result.response.text().trim();
+    } catch (error) {
+      console.error("Gemini failed to generate cover letter:", error);
+      if (
+        error.status === 429 ||
+        (error.statusText && error.statusText.includes("Too Many Requests")) ||
+        (error.message && error.message.includes("Too Many Requests"))
+      ) {
+        // Fallback to Groq
+        try {
+          content = await fetchGroqCoverLetter(prompt);
+        } catch (groqErr) {
+          console.error("Groq also failed to generate cover letter:", groqErr);
+          throw new Error("Both Gemini and Groq failed to generate the cover letter. Please try again later.");
+        }
+      } else {
+        throw error;
+      }
+    }
 
     const coverLetter = await db.coverLetter.create({
       data: {
@@ -96,7 +146,7 @@ export async function generateCoverLetter(data) {
 
     return coverLetter;
   } catch (error) {
-    console.error("Error generating cover letter:", error.message);
+    console.error("Error generating cover letter:", error);
     throw new Error("Failed to generate cover letter");
   }
 }

@@ -17,16 +17,39 @@ import QuizResult from "./quiz-result";
 import useFetch from "@/hooks/use-fetch";
 import { BarLoader } from "react-spinners";
 
-export default function Quiz() {
+export default function Quiz({ provider = "gemini" }) {
   const [currentQuestion, setCurrentQuestion] = useState(0);
   const [answers, setAnswers] = useState([]);
   const [showExplanation, setShowExplanation] = useState(false);
+  const [actualProvider, setActualProvider] = useState(null);
+  const [errorDetails, setErrorDetails] = useState(null);
 
   const {
     loading: generatingQuiz,
     fn: generateQuizFn,
     data: quizData,
-  } = useFetch(generateQuiz);
+  } = useFetch(async (prov) => {
+    setErrorDetails(null);
+    try {
+      const result = await generateQuiz(prov);
+      setActualProvider(prov);
+      return result;
+    } catch (err) {
+      // If Gemini fails, try Groq fallback
+      if (
+        prov === "gemini" &&
+        err.message &&
+        (err.message.includes("Both Gemini and Groq API limits reached") ||
+          err.message.toLowerCase().includes("groq"))
+      ) {
+        setActualProvider("groq");
+        setErrorDetails(err.message);
+      } else {
+        setErrorDetails(err.message || "Unknown error");
+      }
+      throw err;
+    }
+  });
 
   const {
     loading: savingResult,
@@ -80,12 +103,41 @@ export default function Quiz() {
     setCurrentQuestion(0);
     setAnswers([]);
     setShowExplanation(false);
-    generateQuizFn();
+    generateQuizFn(provider);
     setResultData(null);
   };
 
+  // Helper for provider label
+  let providerLabel = null;
+  if (actualProvider === "groq") providerLabel = "Powered by Groq";
+  else if (actualProvider === "gemini") providerLabel = "Powered by Gemini";
+  else providerLabel = null;
+
   if (generatingQuiz) {
     return <BarLoader className="mt-4" width={"100%"} color="gray" />;
+  }
+
+  // Show error if quizData is not an array and is an error string/object
+  if (
+    quizData &&
+    !Array.isArray(quizData) &&
+    (quizData.error ||
+      (typeof quizData === "string" &&
+        (quizData.toLowerCase().startsWith("failed") ||
+         quizData.toLowerCase().includes("api failed") ||
+         quizData.toLowerCase().includes("error") ||
+         quizData.toLowerCase().includes("limits reached"))))
+  ) {
+    // Log the error to the browser console for debugging
+    console.error("Quiz error:", quizData, errorDetails);
+    return (
+      <div className="p-4 bg-red-100 border border-red-400 rounded text-red-700 mx-2">
+        <strong>Error:</strong> {quizData.error || quizData}
+        {errorDetails && (
+          <div className="mt-2 text-xs text-gray-600 whitespace-pre-wrap">{errorDetails}</div>
+        )}
+      </div>
+    );
   }
 
   // Show results if quiz is completed
@@ -110,7 +162,7 @@ export default function Quiz() {
           </p>
         </CardContent>
         <CardFooter>
-          <Button onClick={generateQuizFn} className="w-full">
+          <Button onClick={() => generateQuizFn(provider)} className="w-full">
             Start Quiz
           </Button>
         </CardFooter>
@@ -123,6 +175,9 @@ export default function Quiz() {
   return (
     <Card className="mx-2">
       <CardHeader>
+        {providerLabel && (
+          <div className="mb-2 text-xs text-muted-foreground font-semibold uppercase tracking-wide text-right">{providerLabel}</div>
+        )}
         <CardTitle>
           Question {currentQuestion + 1} of {quizData.length}
         </CardTitle>

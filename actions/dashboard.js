@@ -206,8 +206,8 @@ export const generateCareerRoadmap = async (industry, userExperience, userSkills
   return JSON.parse(cleanedText);
 };
 
-export async function getIndustryInsights(provider = "gemini") {
-  console.log("getIndustryInsights called with provider:", provider);
+export async function getIndustryInsights(provider = "gemini", forceRefresh = false) {
+  console.log("getIndustryInsights called with provider:", provider, "forceRefresh:", forceRefresh);
   const { userId } = await auth();
   if (!userId) throw new Error("Unauthorized");
 
@@ -221,101 +221,74 @@ export async function getIndustryInsights(provider = "gemini") {
 
   const user = await db.user.findUnique({
     where: { clerkUserId: userId },
-    include: {
-      industryInsight: true,
-    },
   });
 
   if (!user) throw new Error("User not found");
 
-  // STRICT CACHE: Only call Gemini if no cached data exists
-  if (!user.industryInsight) {
-    try {
-      let insights = await generateAIInsights(user.industry, provider);
-      const industryInsight = await db.industryInsight.create({
-        data: {
-          industry: user.industry,
-          ...insights,
-          nextUpdate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-        },
-      });
-      const careerRoadmap = await generateCareerRoadmap(
-        user.industry,
-        user.experience || 0,
-        user.skills || [],
-        provider
-      );
-      return {
-        insights: industryInsight,
-        user: {
-          name: clerkUser?.firstName && clerkUser?.lastName ? `${clerkUser.firstName} ${clerkUser.lastName}` : clerkUser?.username || clerkUser?.emailAddress || "User",
-          email: clerkUser?.emailAddresses?.[0]?.emailAddress || undefined,
-          skills: user.skills || [],
-          experience: user.experience || 0,
-          industry: user.industry || undefined,
-        },
-        careerRoadmap,
-      };
-    } catch (err) {
-      if (provider === "gemini" && (err.status === 429 || (err.statusText && err.statusText.includes("Too Many Requests")))) {
-        // If Gemini fails due to quota, try Groq as fallback
-        try {
-          const insights = await fetchGroqInsights(user.industry);
-          const industryInsight = await db.industryInsight.create({
-            data: {
-              industry: user.industry,
-              ...insights,
-              nextUpdate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-            },
-          });
-          const careerRoadmap = await generateCareerRoadmap(
-            user.industry,
-            user.experience || 0,
-            user.skills || [],
-            provider
-          );
-          return {
-            insights: industryInsight,
-            user: {
-              name: clerkUser?.firstName && clerkUser?.lastName ? `${clerkUser.firstName} ${clerkUser.lastName}` : clerkUser?.username || clerkUser?.emailAddress || "User",
-              email: clerkUser?.emailAddresses?.[0]?.emailAddress || undefined,
-              skills: user.skills || [],
-              experience: user.experience || 0,
-              industry: user.industry || undefined,
-            },
-            careerRoadmap,
-          };
-        } catch (groqErr) {
-          return {
-            error: "Both Gemini and Groq API limits reached or failed. Please try again tomorrow or upgrade your plan.",
-          };
-        }
-      }
-      if (err.status === 429 || (err.statusText && err.statusText.includes("Too Many Requests"))) {
+  // Always fetch fresh data from Gemini (fallback to Groq)
+  try {
+    let insights = await generateAIInsights(user.industry, provider);
+    const careerRoadmap = await generateCareerRoadmap(
+      user.industry,
+      user.experience || 0,
+      user.skills || [],
+      provider
+    );
+    return {
+      insights,
+      user: {
+        name: clerkUser?.firstName && clerkUser?.lastName ? `${clerkUser.firstName} ${clerkUser.lastName}` : clerkUser?.username || clerkUser?.emailAddress || "User",
+        email: clerkUser?.emailAddresses?.[0]?.emailAddress || undefined,
+        skills: user.skills || [],
+        experience: user.experience || 0,
+        industry: user.industry || undefined,
+      },
+      careerRoadmap,
+    };
+  } catch (err) {
+    console.error("Gemini error in getIndustryInsights:", err);
+    // Robust fallback: check for any quota/limit error
+    const errMsg = (err?.message || "").toLowerCase();
+    if (
+      provider === "gemini" && (
+        err.status === 429 ||
+        (err.statusText && err.statusText.toLowerCase().includes("too many requests")) ||
+        errMsg.includes("too many requests") ||
+        errMsg.includes("quota") ||
+        errMsg.includes("limit")
+      )
+    ) {
+      try {
+        const insights = await fetchGroqInsights(user.industry);
+        const careerRoadmap = await generateCareerRoadmap(
+          user.industry,
+          user.experience || 0,
+          user.skills || [],
+          provider
+        );
         return {
-          error: "You have reached the daily Gemini API limit for industry insights. Please try again tomorrow or upgrade your plan.",
+          insights,
+          user: {
+            name: clerkUser?.firstName && clerkUser?.lastName ? `${clerkUser.firstName} ${clerkUser.lastName}` : clerkUser?.username || clerkUser?.emailAddress || "User",
+            email: clerkUser?.emailAddresses?.[0]?.emailAddress || undefined,
+            skills: user.skills || [],
+            experience: user.experience || 0,
+            industry: user.industry || undefined,
+          },
+          careerRoadmap,
+        };
+      } catch (groqErr) {
+        console.error("Groq fallback also failed:", groqErr);
+        return {
+          error: "Both Gemini and Groq API limits reached or failed. Please try again tomorrow or upgrade your plan.",
         };
       }
-      throw err;
     }
+    if (err.status === 429 || (err.statusText && err.statusText.includes("Too Many Requests"))) {
+      return {
+        error: "You have reached the daily Gemini API limit for industry insights. Please try again tomorrow or upgrade your plan.",
+      };
+    }
+    throw err;
   }
-
-  // Always use cached data if it exists
-  const careerRoadmap = await generateCareerRoadmap(
-    user.industry,
-    user.experience || 0,
-    user.skills || [],
-    provider
-  );
-  return {
-    insights: user.industryInsight,
-    user: {
-      name: clerkUser?.firstName && clerkUser?.lastName ? `${clerkUser.firstName} ${clerkUser.lastName}` : clerkUser?.username || clerkUser?.emailAddress || "User",
-      email: clerkUser?.emailAddresses?.[0]?.emailAddress || undefined,
-      skills: user.skills || [],
-      experience: user.experience || 0,
-      industry: user.industry || undefined,
-    },
-    careerRoadmap,
-  };
 }
