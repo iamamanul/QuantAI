@@ -9,6 +9,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
-    - run: docker build . -f Dockerfile.prod -t iamamanul/quantai
-    - run: echo "${{secrets.DOCKERHUB_PASSWORD}}" | docker login -u ${{secrets.DOCKERHUB_USERNAME}} --password-stdin
-    - run: docker push iamamanul/quantai:latest
+    - name: Build Docker Image # Added a descriptive name for clarity
+      run: |
+        docker build . \
+          -f Dockerfile.prod \
+          --build-arg NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=${{ secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }} \
+          -t iamamanul/quantai
+    - name: Log in to Docker Hub # Added a descriptive name for clarity
+      run: echo "${{secrets.DOCKERHUB_PASSWORD}}" | docker login -u ${{secrets.DOCKERHUB_USERNAME}} --password-stdin
+    - name: Push Docker Image # Added a descriptive name for clarity
+      run: docker push iamamanul/quantai:latest
