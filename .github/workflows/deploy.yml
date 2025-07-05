@@ -5,17 +5,80 @@ on:
     branches: [ "main" ]
 
 jobs:
-  deploy:
+  # Job to build and push the Docker image to Docker Hub
+  build-and-push:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
-    - name: Build Docker Image # Added a descriptive name for clarity
+    - name: Build Docker Image
       run: |
         docker build . \
           -f Dockerfile.prod \
           --build-arg NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=${{ secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }} \
           -t iamamanul/quantai
-    - name: Log in to Docker Hub # Added a descriptive name for clarity
+    - name: Log in to Docker Hub
       run: echo "${{secrets.DOCKERHUB_PASSWORD}}" | docker login -u ${{secrets.DOCKERHUB_USERNAME}} --password-stdin
-    - name: Push Docker Image # Added a descriptive name for clarity
+    - name: Push Docker Image
       run: docker push iamamanul/quantai:latest
+
+  # New job to deploy the Docker image to the EC2 instance
+  deploy-to-ec2:
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    # Set to true if you want the overall workflow to pass even if deployment fails
+    continue-on-error: true
+    steps:
+    - name: Deploy to EC2 # Giving this step an ID to check its success
+      id: deploy_script
+      uses: appleboy/ssh-action@v1.0.3
+      with:
+        host: ${{ secrets.EC2_HOST }}
+        username: ${{ secrets.EC2_USERNAME }}
+        key: ${{ secrets.SSH_PRIVATE_KEY }}
+        script: |
+          # 1. Log in to Docker Hub on the EC2 instance
+          echo "${{secrets.DOCKERHUB_PASSWORD}}" | docker login -u ${{secrets.DOCKERHUB_USERNAME}} --password-stdin
+
+          # 2. Pull the latest Docker image
+          docker pull iamamanul/quantai:latest
+
+          # 3. Stop and remove the old container if it's running or exists
+          # Using || true to ensure the script continues even if stop/rm fail (e.g., container not found)
+          echo "Attempting to stop existing quantai-app container..."
+          docker stop quantai-app || true
+
+          echo "Attempting to remove old quantai-app container..."
+          docker rm quantai-app || true
+
+          # 4. Run the new Docker container with all necessary environment variables
+          docker run -d \
+            --name quantai-app \
+            -p 80:3000 \
+            -e NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY='${{ secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}' \
+            -e CLERK_SECRET_KEY='${{ secrets.CLERK_SECRET_KEY }}' \
+            -e NEXT_PUBLIC_CLERK_SIGN_IN_URL='/sign-in' \
+            -e NEXT_PUBLIC_CLERK_SIGN_UP_URL='/sign-up' \
+            -e NEXT_PUBLIC_CLERK_AFTER_SIGN_IN_URL='/onboarding' \
+            -e NEXT_PUBLIC_CLERK_AFTER_SIGN_UP_URL='/onboarding' \
+            -e DATABASE_URL='${{ secrets.DATABASE_URL }}' \
+            -e GEMINI_API_KEY='${{ secrets.GEMINI_API_KEY }}' \
+            -e GROQ_API_KEY='${{ secrets.GROQ_API_KEY }}' \
+            -e INNGEST_EVENT_KEY='${{ secrets.INNGEST_EVENT_KEY }}' \
+            -e INNGEST_SIGNING_KEY='${{ secrets.INNGEST_SIGNING_KEY }}' \
+            iamamanul/quantai:latest
+
+          echo "Deployment script finished."
+
+    - name: Send Telegram Notification # This step uses the 'id' of the previous step
+      if: steps.deploy_script.outcome == 'success' # Only run if the 'Deploy to EC2' script step was successful
+      uses: appleboy/telegram-action@master # Using the Telegram action
+      with:
+        to: ${{ secrets.TELEGRAM_CHAT_ID }}
+        token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+        message: |
+          🚀 Deployment Successful!
+          Repository: ${{ github.repository }}
+          Branch: ${{ github.ref_name }}
+          Commit: ${{ github.sha }}
+          Website URL: http://${{ secrets.EC2_HOST }}
+          Check it out!
