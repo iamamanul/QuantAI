@@ -51,3 +51,54 @@ jobs:
     - name: "Build command"
       run: npm run build
 
+    # --- Telegram Notification Step ---
+    # This step is now correctly nested under the 'steps' of the 'build' job.
+    - name: Telegram Notification
+      # This makes sure the notification is sent even if previous steps fail
+      if: always()
+      run: |
+        send_telegram_message() {
+          local message="$1"
+          curl -s -X POST \
+            https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage \
+            -d chat_id=${{ secrets.TELEGRAM_CHAT_ID }} \
+            -d text="$message" \
+            -d parse_mode="Markdown"
+        }
+
+        # Determine workflow status
+        WORKFLOW_STATUS="Unknown"
+        STATUS_EMOJI=""
+        if [[ "${{ job.status }}" == "success" ]]; then
+          WORKFLOW_STATUS="SUCCESS ✅"
+          STATUS_EMOJI="✅"
+        elif [[ "${{ job.status }}" == "failure" ]]; then
+          WORKFLOW_STATUS="FAILED ❌"
+          STATUS_EMOJI="❌"
+        elif [[ "${{ job.status }}" == "cancelled" ]]; then
+          WORKFLOW_STATUS="CANCELLED 🚫"
+          STATUS_EMOJI="🚫"
+        fi
+
+        # Get the commit SHA
+        COMMIT_SHA="${{ github.sha }}"
+        # Get the short commit SHA
+        SHORT_COMMIT_SHA="${{ github.sha_short }}"
+
+        # Sanitize repository name for Markdown
+        REPOSITORY_NAME="${{ github.repository }}"
+        REPOSITORY_NAME_SANITIZED=$(echo "$REPOSITORY_NAME" | sed 's@_@\\_@g')
+
+        # Construct the message
+        MESSAGE="*GitHub Workflow Status Report* ${STATUS_EMOJI}
+
+        *Repository:* $REPOSITORY_NAME_SANITIZED
+        *Workflow:* ${{ github.workflow }}
+        *Status:* *$WORKFLOW_STATUS*
+        *Commit:* \`${SHORT_COMMIT_SHA}\`
+        *Branch:* \`${{ github.ref_name }}\`
+
+        *Check full details here:*
+        [View Workflow Run](${{ github.server_url }}/$REPOSITORY_NAME/actions/runs/${{ github.run_id }})"
+
+        send_telegram_message "$MESSAGE"
